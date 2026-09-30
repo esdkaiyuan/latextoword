@@ -5,7 +5,7 @@ import { extractPdfText } from '../domain/pdfImport';
 import type { NormalizedRect, PdfAnnotation, PdfRect } from '../domain/pdfAnnotations';
 import type { PdfSession } from '../domain/documentSession';
 import { observePdfLoad } from '../domain/pdfLoadTask';
-import { fitPdfPageScale } from '../domain/pdfView';
+import { adjustPdfZoom, fitPdfPageScale, getPdfZoomShortcut } from '../domain/pdfView';
 import PdfPageCanvas from './PdfPageCanvas';
 
 type Props = { session: PdfSession; busy: boolean; onAnnotationsChange: (items: PdfAnnotation[]) => void; onOcrCopy: () => void };
@@ -70,6 +70,42 @@ export default function PdfDocumentEditor({ session, busy, onAnnotationsChange, 
     return () => { cancelled = true; observer.disconnect(); };
   }, [document, pageNumber, fitToPage, fitRequest]);
 
+  useEffect(() => {
+    const container = pageScrollRef.current;
+    if (!container) return;
+    const handleWheel = (event: WheelEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.deltaY === 0) return;
+      event.preventDefault();
+      setFitToPage(false);
+      setFitReady(true);
+      setZoom((current) => adjustPdfZoom(current, event.deltaY < 0 ? 0.1 : -0.1));
+    };
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  useEffect(() => {
+    const handleZoomShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      const shortcut = getPdfZoomShortcut(event.key);
+      if (!shortcut) return;
+      event.preventDefault();
+      if (shortcut === 'fit') {
+        setFitReady(false);
+        setFitToPage(true);
+        setFitRequest((current) => current + 1);
+        return;
+      }
+      setFitToPage(false);
+      setFitReady(true);
+      setZoom((current) => adjustPdfZoom(current, shortcut === 'in' ? 0.1 : -0.1));
+    };
+    window.addEventListener('keydown', handleZoomShortcut);
+    return () => window.removeEventListener('keydown', handleZoomShortcut);
+  }, []);
+
   const matches = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase();
     return needle ? pageTexts.filter((item) => item.text.toLocaleLowerCase().includes(needle)) : [];
@@ -104,7 +140,7 @@ export default function PdfDocumentEditor({ session, busy, onAnnotationsChange, 
   function changeZoom(delta: number) {
     setFitToPage(false);
     setFitReady(true);
-    setZoom((current) => Math.max(0.6, Math.min(2.4, Math.round((current + delta) * 10) / 10)));
+    setZoom((current) => adjustPdfZoom(current, delta));
   }
 
   return (
@@ -112,7 +148,7 @@ export default function PdfDocumentEditor({ session, busy, onAnnotationsChange, 
       <div className="pdf-toolbar">
         <div className="pdf-tools"><button disabled={busy} className={tool === 'select' ? 'active' : ''} onClick={() => setTool('select')}>选择/移动</button><button disabled={busy} className={tool === 'highlight' ? 'active' : ''} onClick={() => setTool('highlight')}>拖拽高亮</button><button disabled={busy} className={tool === 'note' ? 'active' : ''} onClick={() => setTool('note')}>添加批注</button><button disabled={busy || !selectedAnnotationId} onClick={removeSelectedAnnotation}>删除选中批注</button><button disabled={busy} onClick={onOcrCopy}>OCR 转可编辑副本</button></div>
         <div className="pdf-search"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索 PDF 文本" aria-label="搜索 PDF 文本" /><span>{matches.length} 页匹配</span></div>
-        <div className="pdf-page-nav"><button onClick={() => { setFitReady(false); setFitToPage(true); setFitRequest((current) => current + 1); }}>适合页面</button><button onClick={() => changeZoom(-0.2)} aria-label="缩小 PDF">−</button><span>{Math.round(zoom * 100)}%</span><button onClick={() => changeZoom(0.2)} aria-label="放大 PDF">+</button><button disabled={!document || pageNumber <= 1} onClick={() => movePage(-1)}>上一页</button><span>{pageNumber} / {document?.numPages ?? '—'}</span><button disabled={!document || pageNumber >= (document?.numPages ?? 0)} onClick={() => movePage(1)}>下一页</button></div>
+        <div className="pdf-page-nav"><button title="Ctrl+0" onClick={() => { setFitReady(false); setFitToPage(true); setFitRequest((current) => current + 1); }}>适合页面</button><button title="Ctrl+-" onClick={() => changeZoom(-0.2)} aria-label="缩小 PDF">−</button><span title="Ctrl+滚轮缩放">{Math.round(zoom * 100)}%</span><button title="Ctrl++" onClick={() => changeZoom(0.2)} aria-label="放大 PDF">+</button><button disabled={!document || pageNumber <= 1} onClick={() => movePage(-1)}>上一页</button><span>{pageNumber} / {document?.numPages ?? '—'}</span><button disabled={!document || pageNumber >= (document?.numPages ?? 0)} onClick={() => movePage(1)}>下一页</button></div>
       </div>
       {matches.length > 0 && <div className="pdf-search-results">{matches.slice(0, 12).map((match, index) => <button key={match.page} onClick={() => navigateToSearchResult(index)}>第 {match.page} 页：{match.text.slice(0, 90)}</button>)}</div>}
       {error ? <div className="document-error">{error}</div> : null}
