@@ -13,9 +13,12 @@ describe('math preview', () => {
     }
   });
 
-  it('keeps the KaTeX font metrics for hat accents in the selected preview font', () => {
+  it('applies selected fonts to ordinary glyphs without overriding KaTeX structure fonts', () => {
     const stylesheet = readFileSync('src/renderer/styles.css', 'utf8');
 
+    expect(stylesheet).not.toContain('.formula-preview .katex, .formula-preview .katex *');
+    expect(stylesheet).toMatch(/\.formula-preview \.katex\s*\{\s*font-family:\s*inherit !important/);
+    expect(stylesheet).toMatch(/\.formula-preview \.katex \.mathnormal[^{]*\{\s*font-family:\s*inherit !important/);
     expect(stylesheet).toMatch(/\.formula-preview \.katex \.accent-body \.mord\s*\{\s*font-family:\s*KaTeX_Main !important/);
   });
 
