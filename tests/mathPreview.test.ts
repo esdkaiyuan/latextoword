@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { getFormulaScale, renderLatex } from '../src/domain/mathPreview';
 
 describe('math preview', () => {
@@ -10,6 +11,12 @@ describe('math preview', () => {
       expect(result.mathml).toContain('<math');
       expect(result.html).toContain('katex');
     }
+  });
+
+  it('keeps the KaTeX font metrics for hat accents in the selected preview font', () => {
+    const stylesheet = readFileSync('src/renderer/styles.css', 'utf8');
+
+    expect(stylesheet).toMatch(/\.formula-preview \.katex \.accent-body \.mord\s*\{\s*font-family:\s*KaTeX_Main !important/);
   });
 
   it('returns a positioned error for invalid latex', () => {
