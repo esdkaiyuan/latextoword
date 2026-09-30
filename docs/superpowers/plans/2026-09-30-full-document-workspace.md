@@ -132,5 +132,5 @@
 - [x] Inspect project status, ignore rules, local memory folder, OCR assets, and candidate filenames; local memory/build/dependency/temp folders are excluded.
 - [x] Ensure local `main` is based on `origin/main`; preserve both README history and local project content without force-pushing.
 - [x] Review the staged diff and ensure build outputs, dependencies, temporary directories, secrets, and test artifacts are excluded.
-- [ ] Create one complete-project commit with a descriptive message.
-- [ ] Push `main` to `origin` without force; verify the remote commit hash and clean committed working tree.
+- [x] Create the complete-project feature commit and a focused security/data-loss follow-up commit.
+- [x] Push `main` to `origin` without force; verify the remote commit hash and clean committed working tree.
