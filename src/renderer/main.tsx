@@ -1,3 +1,4 @@
+import './pdfjsCompatibility';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
