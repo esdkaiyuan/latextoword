@@ -8,6 +8,7 @@ declare global {
         setTheme(themeId: string): void;
         quit(): void;
         toggleFullscreen(): Promise<boolean>;
+        onBeforeClose(callback: (respond: (shouldClose: boolean) => void) => void): () => void;
       };
       project: {
         open(): Promise<{ project: unknown; recent: string[] } | null>;

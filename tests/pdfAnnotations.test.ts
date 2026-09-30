@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PDFArray, PDFDocument, PDFName } from 'pdf-lib';
-import { applyPdfAnnotations, moveNormalizedRect, normalizedRectToPdf } from '../src/domain/pdfAnnotations';
+import { applyPdfAnnotations, moveNormalizedRect, normalizedRectToPdf, normalizedRectToPdfViewport } from '../src/domain/pdfAnnotations';
 
 describe('PDF annotation geometry', () => {
   it('converts top-left normalized coordinates to PDF points', () => {
@@ -11,6 +11,16 @@ describe('PDF annotation geometry', () => {
 
   it('moves an annotation while keeping the whole mark inside the page', () => {
     expect(moveNormalizedRect({ x: 0.2, y: 0.3, width: 0.1, height: 0.1 }, 0.8, -0.5)).toEqual({ x: 0.9, y: 0, width: 0.1, height: 0.1 });
+  });
+
+  it('maps displayed rectangles back through rotated PDF page viewports', () => {
+    const rect = normalizedRectToPdfViewport({ x: 0.1, y: 0.2, width: 0.3, height: 0.1 }, {
+      width: 700,
+      height: 500,
+      convertToPdfPoint: (x, y) => [y, 700 - x]
+    });
+
+    expect(rect).toEqual({ x: 100, y: 420, width: 50, height: 210 });
   });
 
   it('clamps drags that start or end outside the page', () => {

@@ -15,6 +15,7 @@ const SOURCE_EXTENSIONS = new Map([
   ['.py', 'structured-text'], ['.r', 'structured-text'], ['.m', 'structured-text'], ['.jl', 'structured-text'],
   ['.sage', 'structured-text'], ['.csv', 'text'], ['.tsv', 'text']
 ]);
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp', '.gif', '.svg', '.avif']);
 
 function extensionOf(name: string): string {
   const leaf = name.split(/[\\/]/).at(-1) ?? name;
@@ -30,6 +31,7 @@ export function documentCapabilities(name: string): DocumentCapability {
     return { mode: 'rich-text', format: extension.slice(1), preview: true, saveAs: true, extractFormulas: true };
   }
   if (extension === '.pdf') return { mode: 'pdf-annotation', format: 'pdf', preview: true, saveAs: true, extractFormulas: true };
+  if (IMAGE_EXTENSIONS.has(extension)) return { mode: 'readonly', format: 'image', preview: true, saveAs: false, extractFormulas: true };
   return { mode: 'readonly', format: extension.slice(1) || 'unknown', preview: true, saveAs: false, extractFormulas: true };
 }
 

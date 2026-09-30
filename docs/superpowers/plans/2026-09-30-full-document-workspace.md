@@ -26,6 +26,8 @@
 **Files:**
 - Create: `src/domain/document.ts`
 - Create: `tests/document.test.ts`
+- Create: `src/main/trustedNavigation.cjs`
+- Create: `tests/trustedNavigation.test.ts`
 - Modify: `src/main/main.cjs`
 - Modify: `src/main/preload.cjs`
 - Modify: `src/renderer/global.d.ts`
@@ -37,7 +39,7 @@
 - [x] Add failing Vitest cases for format capabilities and save-target compatibility in `tests/document.test.ts`.
 - [x] Run `npm test -- tests/document.test.ts` and confirm the missing-model failure.
 - [x] Implement the typed document capability model separately from formula project types.
-- [x] Add main/preload IPC for native open/save dialogs, bounded byte reads/writes, conversion and DOCX export.
+- [x] Add main/preload IPC for native open/save dialogs, bounded atomic byte writes, conversion and DOCX export; restrict IPC to the trusted app renderer URL.
 - [x] Run focused tests and `npm run typecheck`; confirm both pass.
 
 ### Task 2: Source-document editing and live preview
@@ -60,7 +62,7 @@
 - [x] Run the focused tests and verify failures are about missing source-document behavior.
 - [x] Implement `openSourceDocument` / `serializeSourceDocument` with encoding warnings and unchanged-source preservation.
 - [x] Add CodeMirror source editing and safe Markdown/LaTeX/HTML/RTF preview with KaTeX math.
-- [x] Add open, dirty indicator, save, Save As, undo/redo shortcuts, and unsaved-change confirmation without changing formula workspace state.
+- [x] Add open, dirty indicator, save, Save As, undo/redo shortcuts, and unsaved-change confirmation on document switches and app close without changing formula workspace state.
 - [x] Run source-document tests, regression suite, typecheck, and production build.
 
 ### Task 3: Word/ODT conversion editor
@@ -100,7 +102,7 @@
 - `PdfAnnotation` stores page index, normalized page coordinates, annotation kind (`highlight` or `note`), text, and color.
 - `applyPdfAnnotations(bytes, annotations)` returns a new PDF byte array and never mutates the original source bytes.
 
-- [x] Add tests proving normalized page coordinates, clamping, movement, annotation serialization, and unchanged output when no marks exist.
+- [x] Add tests proving normalized coordinates, clamping, movement, rotated-viewport mapping, annotation serialization, and unchanged output when no marks exist.
 - [x] Run focused tests and verify failures are due to missing geometry/annotation behavior.
 - [x] Add PDF.js page rendering, page navigation, zoom, text search/selection, and in-session move/delete/highlight/note controls.
 - [x] Export annotations to a PDF copy; preserve the source and retain editor state after save failure.
@@ -117,8 +119,8 @@
 - Modify: `src/renderer/FileViewer.tsx`
 - Modify: `tests/app.smoke.test.tsx`; focused codec and annotation tests live under `tests/`.
 
-- [x] Add integration coverage for workspace switching, document capability modes, unsaved-state display, and safe file parsing.
-- [x] Run targeted tests, the full `npm test` suite, typecheck, and production build; resolve pre-existing stale expectations and drag-event robustness.
+- [x] Add integration coverage for workspace switching, document capability modes, unsaved-state/close prompts, and safe file parsing.
+- [x] Run targeted tests, the full `npm test` suite (104 passing), typecheck, and production build; resolve pre-existing stale expectations and drag-event robustness.
 - [x] Review responsive editor/preview and independent-scroll CSS plus PDF page navigation; live LibreOffice conversion remains environment-dependent.
 - [x] Update README with supported formats, fidelity limits, and local/online OCR behavior.
 

@@ -1,14 +1,20 @@
 const { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, nativeImage, safeStorage, shell } = require('electron');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const { createZip } = require('./zip.cjs');
 const { createMathpixClient } = require('./mathpix.cjs');
 const { createCredentialStore } = require('./mathpixCredentials.cjs');
 const { createLocalOcr } = require('./localOcr.cjs');
 const { convertLegacyOffice } = require('./legacyOffice.cjs');
+const { createTrustedNavigationGuard } = require('./trustedNavigation.cjs');
 
 const isDev = !app.isPackaged;
+const rendererEntryPath = path.join(__dirname, '../../dist-renderer/index.html');
+const isTrustedNavigation = createTrustedNavigationGuard({ isDev, appEntryPath: rendererEntryPath });
 let mainWindow;
+let allowWindowClose = false;
+let windowClosePending = false;
 const mathpixCredentials = createCredentialStore(app, safeStorage);
 const mathpix = createMathpixClient(mathpixCredentials.load);
 const ocrWorkerPath = app.isPackaged
@@ -42,8 +48,24 @@ function createWindow() {
     }
   });
 
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!isTrustedNavigation(url)) event.preventDefault();
+  });
+  mainWindow.on('close', (event) => {
+    if (allowWindowClose) return;
+    event.preventDefault();
+    if (windowClosePending) return;
+    windowClosePending = true;
+    mainWindow?.webContents.send('window:before-close');
+  });
+  mainWindow.on('closed', () => {
+    mainWindow = undefined;
+    allowWindowClose = false;
+    windowClosePending = false;
+  });
   if (isDev) mainWindow.loadURL('http://localhost:5173');
-  else mainWindow.loadFile(path.join(__dirname, '../../dist-renderer/index.html'));
+  else mainWindow.loadFile(rendererEntryPath);
   return mainWindow;
 }
 
@@ -52,7 +74,7 @@ function createMenu() {
 }
 
 function assertTrustedSender(event) {
-  if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) {
+  if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame || !isTrustedNavigation(event.senderFrame.url)) {
     throw new Error('拒绝来自未授权页面的 IPC 请求');
   }
 }
@@ -70,6 +92,14 @@ function onIpc(channel, listener) {
     listener(event, ...args);
   });
 }
+
+onIpc('window:close-response', (_, shouldClose) => {
+  if (!windowClosePending) return;
+  windowClosePending = false;
+  if (shouldClose !== true) return;
+  allowWindowClose = true;
+  mainWindow?.close();
+});
 
 onIpc('window:set-theme', (_, themeId) => {
   const colors = CHROME_THEMES[themeId] || CHROME_THEMES.white;
@@ -233,7 +263,14 @@ function appendDefaultExtension(filePath, extensions) {
 
 async function writeDocumentFile(filePath, value) {
   const bytes = documentBytes(value);
-  await fs.writeFile(filePath, bytes);
+  const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${crypto.randomUUID()}.tmp`);
+  try {
+    await fs.writeFile(temporaryPath, bytes, { flag: 'wx' });
+    await fs.rename(temporaryPath, filePath);
+  } catch (error) {
+    await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 handleIpc('document:open', async () => {

@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { extractPdfText } from '../domain/pdfImport';
-import type { NormalizedRect, PdfAnnotation } from '../domain/pdfAnnotations';
+import type { NormalizedRect, PdfAnnotation, PdfRect } from '../domain/pdfAnnotations';
 import type { PdfSession } from '../domain/documentSession';
 import PdfPageCanvas from './PdfPageCanvas';
 
-type Props = { session: PdfSession; onAnnotationsChange: (items: PdfAnnotation[]) => void; onOcrCopy: () => void };
+type Props = { session: PdfSession; busy: boolean; onAnnotationsChange: (items: PdfAnnotation[]) => void; onOcrCopy: () => void };
 
-export default function PdfDocumentEditor({ session, onAnnotationsChange, onOcrCopy }: Props) {
+export default function PdfDocumentEditor({ session, busy, onAnnotationsChange, onOcrCopy }: Props) {
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageTexts, setPageTexts] = useState<Array<{ page: number; text: string }>>([]);
@@ -42,8 +42,8 @@ export default function PdfDocumentEditor({ session, onAnnotationsChange, onOcrC
     setTool('select');
   }
 
-  function moveAnnotation(id: string, rect: NormalizedRect) {
-    onAnnotationsChange(session.annotations.map((item) => item.id === id ? { ...item, rect } : item));
+  function moveAnnotation(id: string, rect: NormalizedRect, pdfRect?: PdfRect) {
+    onAnnotationsChange(session.annotations.map((item) => item.id === id ? { ...item, rect, pdfRect } : item));
   }
 
   function removeSelectedAnnotation() {
@@ -68,14 +68,14 @@ export default function PdfDocumentEditor({ session, onAnnotationsChange, onOcrC
   return (
     <section className="pdf-document-editor" aria-label="PDF 文档工作区">
       <div className="pdf-toolbar">
-        <div className="pdf-tools"><button className={tool === 'select' ? 'active' : ''} onClick={() => setTool('select')}>选择/移动</button><button className={tool === 'highlight' ? 'active' : ''} onClick={() => setTool('highlight')}>拖拽高亮</button><button className={tool === 'note' ? 'active' : ''} onClick={() => setTool('note')}>添加批注</button><button disabled={!selectedAnnotationId} onClick={removeSelectedAnnotation}>删除选中批注</button><button onClick={onOcrCopy}>OCR 转可编辑副本</button></div>
+        <div className="pdf-tools"><button disabled={busy} className={tool === 'select' ? 'active' : ''} onClick={() => setTool('select')}>选择/移动</button><button disabled={busy} className={tool === 'highlight' ? 'active' : ''} onClick={() => setTool('highlight')}>拖拽高亮</button><button disabled={busy} className={tool === 'note' ? 'active' : ''} onClick={() => setTool('note')}>添加批注</button><button disabled={busy || !selectedAnnotationId} onClick={removeSelectedAnnotation}>删除选中批注</button><button disabled={busy} onClick={onOcrCopy}>OCR 转可编辑副本</button></div>
         <div className="pdf-search"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索 PDF 文本" aria-label="搜索 PDF 文本" /><span>{matches.length} 页匹配</span></div>
         <div className="pdf-page-nav"><button onClick={() => changeZoom(-0.2)} aria-label="缩小 PDF">−</button><span>{Math.round(zoom * 100)}%</span><button onClick={() => changeZoom(0.2)} aria-label="放大 PDF">+</button><button disabled={!document || pageNumber <= 1} onClick={() => movePage(-1)}>上一页</button><span>{pageNumber} / {document?.numPages ?? '—'}</span><button disabled={!document || pageNumber >= (document?.numPages ?? 0)} onClick={() => movePage(1)}>下一页</button></div>
       </div>
       {matches.length > 0 && <div className="pdf-search-results">{matches.slice(0, 12).map((match, index) => <button key={match.page} onClick={() => navigateToSearchResult(index)}>第 {match.page} 页：{match.text.slice(0, 90)}</button>)}</div>}
       {error ? <div className="document-error">{error}</div> : null}
       <div className="pdf-page-scroll">
-        {document ? <PdfPageCanvas document={document} pageNumber={pageNumber} scale={zoom} annotations={session.annotations} selectedId={selectedAnnotationId} tool={tool} onAdd={addAnnotation} onMove={moveAnnotation} onSelect={setSelectedAnnotationId} /> : <div className="document-empty">正在解析 PDF 页面…</div>}
+        {document ? <PdfPageCanvas document={document} pageNumber={pageNumber} scale={zoom} annotations={session.annotations} selectedId={selectedAnnotationId} tool={busy ? null : tool} onAdd={addAnnotation} onMove={moveAnnotation} onSelect={setSelectedAnnotationId} /> : <div className="document-empty">正在解析 PDF 页面…</div>}
       </div>
     </section>
   );

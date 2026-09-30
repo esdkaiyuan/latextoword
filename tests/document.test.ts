@@ -18,6 +18,10 @@ describe('document capabilities', () => {
     expect(documentCapabilities('slides.pptx')).toMatchObject({ mode: 'readonly', preview: true, saveAs: false });
   });
 
+  it('routes common images to a read-only image preview', () => {
+    expect(documentCapabilities('scan.PNG')).toMatchObject({ mode: 'readonly', format: 'image', preview: true, extractFormulas: true });
+  });
+
   it('accepts only save extensions compatible with the current editor', () => {
     expect(isDocumentSaveTarget('notes.md', 'source')).toBe(true);
     expect(isDocumentSaveTarget('notes.docx', 'source')).toBe(false);

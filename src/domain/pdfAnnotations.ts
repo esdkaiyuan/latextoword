@@ -6,9 +6,11 @@ export type PdfAnnotation = {
   page: number;
   kind: 'highlight' | 'note';
   rect: NormalizedRect;
+  pdfRect?: PdfRect;
   text?: string;
 };
 export type PdfRect = { x: number; y: number; width: number; height: number };
+export type PdfViewportTransform = { width: number; height: number; convertToPdfPoint: (x: number, y: number) => number[] };
 type PdfLiteral = Record<string, PDFName | PDFHexString | number | number[]>;
 type PdfLibrary = typeof import('pdf-lib');
 
@@ -44,6 +46,21 @@ export function moveNormalizedRect(rect: NormalizedRect, deltaX: number, deltaY:
   };
 }
 
+export function normalizedRectToPdfViewport(rect: NormalizedRect, viewport: PdfViewportTransform): PdfRect {
+  const left = clamp(rect.x) * viewport.width;
+  const top = clamp(rect.y) * viewport.height;
+  const right = clamp(rect.x + rect.width) * viewport.width;
+  const bottom = clamp(rect.y + rect.height) * viewport.height;
+  const corners = [[left, top], [right, top], [left, bottom], [right, bottom]].map(([x, y]) => viewport.convertToPdfPoint(x, y));
+  const xs = corners.map(([x]) => x);
+  const ys = corners.map(([, y]) => y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return { x: points(minX), y: points(minY), width: points(maxX - minX), height: points(maxY - minY) };
+}
+
 function pushAnnotation(pdf: PDFDocument, library: PdfLibrary, pageIndex: number, annotation: PdfLiteral): void {
   const page = pdf.getPage(pageIndex);
   const reference = pdf.context.register(pdf.context.obj(annotation));
@@ -55,7 +72,7 @@ function pushAnnotation(pdf: PDFDocument, library: PdfLibrary, pageIndex: number
 
 function appendHighlight(pdf: PDFDocument, library: PdfLibrary, mark: PdfAnnotation): void {
   const page = pdf.getPage(mark.page);
-  const rect = normalizedRectToPdf(mark.rect, page.getWidth(), page.getHeight());
+  const rect = mark.pdfRect ?? normalizedRectToPdf(mark.rect, page.getWidth(), page.getHeight());
   const x2 = rect.x + rect.width;
   const y2 = rect.y + rect.height;
   pushAnnotation(pdf, library, mark.page, {
@@ -67,7 +84,7 @@ function appendHighlight(pdf: PDFDocument, library: PdfLibrary, mark: PdfAnnotat
 
 function appendNote(pdf: PDFDocument, library: PdfLibrary, mark: PdfAnnotation): void {
   const page = pdf.getPage(mark.page);
-  const rect = normalizedRectToPdf(mark.rect, page.getWidth(), page.getHeight());
+  const rect = mark.pdfRect ?? normalizedRectToPdf(mark.rect, page.getWidth(), page.getHeight());
   pushAnnotation(pdf, library, mark.page, {
     Type: library.PDFName.of('Annot'), Subtype: library.PDFName.of('Text'),
     Rect: [rect.x, rect.y, rect.x + 20, rect.y + 20],

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
+import type { PageViewport, PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 import { TextLayerBuilder } from 'pdfjs-dist/web/pdf_viewer.mjs';
-import { moveNormalizedRect, type NormalizedRect, type PdfAnnotation } from '../domain/pdfAnnotations';
+import { moveNormalizedRect, normalizedRectToPdfViewport, type NormalizedRect, type PdfAnnotation, type PdfRect } from '../domain/pdfAnnotations';
 import 'pdfjs-dist/web/pdf_viewer.css';
 
-type Props = { document: PDFDocumentProxy; pageNumber: number; scale: number; annotations: PdfAnnotation[]; selectedId: string | null; tool: 'select' | 'highlight' | 'note' | null; onAdd: (annotation: PdfAnnotation) => void; onMove: (id: string, rect: NormalizedRect) => void; onSelect: (id: string) => void };
+type Props = { document: PDFDocumentProxy; pageNumber: number; scale: number; annotations: PdfAnnotation[]; selectedId: string | null; tool: 'select' | 'highlight' | 'note' | null; onAdd: (annotation: PdfAnnotation) => void; onMove: (id: string, rect: NormalizedRect, pdfRect?: PdfRect) => void; onSelect: (id: string) => void };
 type Point = { x: number; y: number };
 type Drag = { start: Point; end: Point; annotationId?: string; originalRect?: NormalizedRect };
 
@@ -23,6 +23,7 @@ function dragRect(drag: Drag): NormalizedRect {
 export default function PdfPageCanvas({ document, pageNumber, scale, annotations, selectedId, tool, onAdd, onMove, onSelect }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<PageViewport | null>(null);
   const [aspectRatio, setAspectRatio] = useState(1.42);
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -34,6 +35,7 @@ export default function PdfPageCanvas({ document, pageNumber, scale, annotations
     async function renderPage() {
       const page = await document.getPage(pageNumber);
       const viewport = page.getViewport({ scale });
+      viewportRef.current = viewport;
       const canvas = canvasRef.current;
       const context = canvas?.getContext('2d');
       if (!canvas || !context || cancelled) return;
@@ -82,17 +84,18 @@ export default function PdfPageCanvas({ document, pageNumber, scale, annotations
   function finishDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (!dragRef.current || !tool) return;
     const finished = { ...dragRef.current, end: pagePoint(event) };
+    const rect = dragRect(finished);
+    const pdfRect = viewportRef.current ? normalizedRectToPdfViewport(rect, viewportRef.current) : undefined;
     if (finished.annotationId) {
-      onMove(finished.annotationId, dragRect(finished));
+      onMove(finished.annotationId, rect, pdfRect);
       dragRef.current = null;
       setDrag(null);
       return;
     }
-    const rect = dragRect(finished);
-    if (tool === 'highlight') onAdd({ id: crypto.randomUUID(), page: pageNumber - 1, kind: 'highlight', rect });
+    if (tool === 'highlight') onAdd({ id: crypto.randomUUID(), page: pageNumber - 1, kind: 'highlight', rect, pdfRect });
     if (tool === 'note') {
       const text = window.prompt('批注内容')?.trim();
-      if (text) onAdd({ id: crypto.randomUUID(), page: pageNumber - 1, kind: 'note', rect, text });
+      if (text) onAdd({ id: crypto.randomUUID(), page: pageNumber - 1, kind: 'note', rect, pdfRect, text });
     }
     dragRef.current = null;
     setDrag(null);

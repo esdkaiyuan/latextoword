@@ -4,7 +4,12 @@ contextBridge.exposeInMainWorld('desktop', {
   window: {
     setTheme: (themeId) => ipcRenderer.send('window:set-theme', themeId),
     quit: () => ipcRenderer.send('window:quit'),
-    toggleFullscreen: () => ipcRenderer.invoke('window:toggle-fullscreen')
+    toggleFullscreen: () => ipcRenderer.invoke('window:toggle-fullscreen'),
+    onBeforeClose: (callback) => {
+      const listener = () => callback((shouldClose) => ipcRenderer.send('window:close-response', shouldClose));
+      ipcRenderer.on('window:before-close', listener);
+      return () => ipcRenderer.removeListener('window:before-close', listener);
+    }
   },
   project: {
     open: () => ipcRenderer.invoke('project:open'),
