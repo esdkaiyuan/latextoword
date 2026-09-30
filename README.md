@@ -1,0 +1,2 @@
+# latextoword
+latex公式转换并导出成word的超级桌面工具
