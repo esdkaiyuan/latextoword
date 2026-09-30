@@ -4,7 +4,7 @@ import { TextLayerBuilder } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import { moveNormalizedRect, normalizedRectToPdfViewport, type NormalizedRect, type PdfAnnotation, type PdfRect } from '../domain/pdfAnnotations';
 import 'pdfjs-dist/web/pdf_viewer.css';
 
-type Props = { document: PDFDocumentProxy; pageNumber: number; scale: number; annotations: PdfAnnotation[]; selectedId: string | null; tool: 'select' | 'highlight' | 'note' | null; onAdd: (annotation: PdfAnnotation) => void; onMove: (id: string, rect: NormalizedRect, pdfRect?: PdfRect) => void; onSelect: (id: string) => void };
+type Props = { document: PDFDocumentProxy; pageNumber: number; scale: number; annotations: PdfAnnotation[]; selectedId: string | null; tool: 'select' | 'highlight' | 'note' | null; onAdd: (annotation: PdfAnnotation) => void; onMove: (id: string, rect: NormalizedRect, pdfRect?: PdfRect) => void; onSelect: (id: string) => void; onRenderError: (message: string) => void };
 type Point = { x: number; y: number };
 type Drag = { start: Point; end: Point; annotationId?: string; originalRect?: NormalizedRect };
 
@@ -20,11 +20,11 @@ function dragRect(drag: Drag): NormalizedRect {
   return { x, y, width: Math.max(0.012, Math.abs(drag.end.x - drag.start.x)), height: Math.max(0.012, Math.abs(drag.end.y - drag.start.y)) };
 }
 
-export default function PdfPageCanvas({ document, pageNumber, scale, annotations, selectedId, tool, onAdd, onMove, onSelect }: Props) {
+export default function PdfPageCanvas({ document, pageNumber, scale, annotations, selectedId, tool, onAdd, onMove, onSelect, onRenderError }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<PageViewport | null>(null);
-  const [aspectRatio, setAspectRatio] = useState(1.42);
+  const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
 
@@ -41,7 +41,7 @@ export default function PdfPageCanvas({ document, pageNumber, scale, annotations
       if (!canvas || !context || cancelled) return;
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      setAspectRatio(viewport.width / viewport.height);
+      setPageSize({ width: viewport.width, height: viewport.height });
       task = page.render({ canvas, canvasContext: context, viewport });
       textLayer = new TextLayerBuilder({ pdfPage: page });
       textLayerRef.current?.replaceChildren(textLayer.div);
@@ -49,7 +49,10 @@ export default function PdfPageCanvas({ document, pageNumber, scale, annotations
       await task.promise;
       page.cleanup();
     }
-    void renderPage().catch(() => undefined);
+    void renderPage().catch((reason: unknown) => {
+      if (cancelled || (reason instanceof Error && reason.name === 'RenderingCancelledException')) return;
+      onRenderError(reason instanceof Error ? reason.message : 'PDF 页面渲染失败');
+    });
     return () => { cancelled = true; task?.cancel(); textLayer?.cancel(); };
   }, [document, pageNumber, scale]);
 
@@ -104,7 +107,7 @@ export default function PdfPageCanvas({ document, pageNumber, scale, annotations
   const dragPreview = drag ? dragRect(drag) : null;
 
   return (
-    <div className="pdf-page-frame" style={{ aspectRatio }} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag}>
+    <div className="pdf-page-frame" style={{ width: pageSize?.width ?? '100%', aspectRatio: pageSize ? `${pageSize.width} / ${pageSize.height}` : 1.42 }} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag}>
       <canvas ref={canvasRef} className="pdf-page-canvas" aria-label={`PDF 第 ${pageNumber} 页`} />
       <div ref={textLayerRef} className="pdf-text-layer" />
       <div className={`pdf-annotation-layer ${tool === 'select' ? 'is-selecting' : tool ? 'is-drawing' : ''}`}>
